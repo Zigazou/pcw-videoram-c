@@ -8,8 +8,10 @@
 #pragma output noredir
 #pragma output nogfxglobals
 
+// A 2048 bytes stack should be more than enough for this little demo
 #define STACK_SIZE 2048
 
+// Line that will receive characters
 static unsigned char line[] = "                                ";
 
 main() {
@@ -18,6 +20,7 @@ main() {
 
     init_video_ram(STACK_SIZE);
 
+    // Print the title frame
     set_size(SIZE_DOUBLE_WIDTH);
     locate(3, 0);
     print("\226\232\232\232\232\232\232\232\234");
@@ -28,10 +31,12 @@ main() {
     locate(3, 3);
     print("\223\232\232\232\232\232\232\232\231");
 
+    // Print the title
     set_size(SIZE_DOUBLE_HEIGHT);
     locate(5, 1);
     print("VideoRAM demo!");
 
+    // Print explanations in french
     set_size(SIZE_NORMAL);
     locate(0, 5);
     print("Le jeu de caract}res de");
@@ -55,6 +60,7 @@ main() {
     locate(0, 15);
     print("de texte.");
 
+    // Print every character (except character 0)
     set_size(SIZE_DOUBLE);
     for(j = 0; j < 16; j++) {
         for(i = 0; i < 16; i++) {
@@ -67,7 +73,10 @@ main() {
         print(line);
     }
 
+    // Wait for a key before returning to CP/M
     getchar();
+
+    // Restore standard screen settings
     restore_video_ram();
 
     return 0;
