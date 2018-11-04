@@ -6,14 +6,14 @@
 
 // Look up table: transforms 4 bits to 8 bits by duplicating each bit.
 // Ex.: 1001 -> 11000011
-static unsigned int double_bits_full[16] = {
+static unsigned char double_bits_full[16] = {
     0, 3, 12, 15, 48, 51, 60, 63, 192, 195, 204, 207, 240, 243, 252, 255
 };
 
 // Look up table: transforms 4 bits to 8 bits by inserting a bit 0 between each
 // bit.
 // Ex.: 1111 -> 10101010
-static unsigned int double_bits_half[16] = {
+static unsigned char double_bits_half[16] = {
     0, 2, 8, 10, 32, 34, 40, 42, 128, 130, 136, 138, 160, 162, 168, 170
 };
 
@@ -29,7 +29,7 @@ static struct {
     unsigned char *font;        // Address of the character font
     unsigned char font_size;    // Size at which the next character will be
                                 // printed
-    unsigned int *brightness;   // Brightness for double width character
+    unsigned char *brightness;  // Brightness for double width character
 } video = { NULL, NULL, 0, 0, NULL, NULL, 0, NULL };
 
 // Function type for a print function
@@ -121,7 +121,7 @@ void set_roller_ram_address() {
     // Determines the address of the roller RAM in this bank
     address = (unsigned int)video.roller & (BANK_SIZE - 1);
 
-    outp(SET_ROLLER_ADDRESS, (bank << 5) + (address >> 9));
+    outp(SET_ROLLER_ADDRESS, (bank * 32) + (address >> 9));
 }
 
 // Change back the roller RAM to its standard address
@@ -181,7 +181,7 @@ void print_normal_size(const unsigned char *string) {
     unsigned char i;
 
     for(; *string != '\0'; string++) {
-        memcpy(video.address, &video.font[*string << 3], 8);
+        memcpy(video.address, &video.font[*string * 8], 8);
         advance_cursor();
     }
 }
@@ -192,8 +192,8 @@ void print_double_width(const unsigned char *string) {
     unsigned char *character_drawing;
 
     for(; *string != '\0'; string++) {
-        character_drawing = &video.font[*string << 3];
-        for(i = 0; i < 8; i++) {
+        character_drawing = &video.font[*string * 8];
+        for(i = 0; i != 8; i++) {
             // Left part
             video.address[i] = video.brightness[*character_drawing >> 4];
 
@@ -218,8 +218,8 @@ void print_double_height(const unsigned char *string) {
     unsigned char *character_drawing;
 
     for(; *string != '\0'; string++) {
-        character_drawing = &video.font[*string << 3];
-        for(i = 0; i < 16; i+= 2) {
+        character_drawing = &video.font[*string * 8];
+        for(i = 0; i != 16; i+= 2) {
             // The same line is printed twice
             video.address[dh_offset[i]] = *character_drawing;
             video.address[dh_offset[i+1]] = *character_drawing;
@@ -235,25 +235,28 @@ void print_double_height(const unsigned char *string) {
 void print_double_size(const unsigned char *string) {
     unsigned char i;
     unsigned char *character_drawing;
+    unsigned char left;
+    unsigned char right;
+    unsigned int offset;
 
     for(; *string != '\0'; string++) {
-        character_drawing = &video.font[*string << 3];
-        for(i = 0; i < 16; i+= 2) {
+        character_drawing = &video.font[*string * 8];
+        for(i = 0; i != 16; i+= 2) {
+            left = video.brightness[*character_drawing >> 4];
+            right = video.brightness[*character_drawing & 15];
+            offset = dh_offset[i];
+
             // Upper left part
-            video.address[dh_offset[i]] =
-                video.brightness[*character_drawing >> 4];
+            video.address[offset] = left;
 
             // Upper right part
-            video.address[dh_offset[i]+8] =
-                video.brightness[*character_drawing & 15];
+            video.address[offset+8] = right;
 
             // Bottom left part
-            video.address[dh_offset[i]+1] =
-                video.brightness[*character_drawing >> 4];
+            video.address[offset+1] = left;
 
             // Bottom right part
-            video.address[dh_offset[i]+9] =
-                video.brightness[*character_drawing & 15];
+            video.address[offset+9] = right;
 
             character_drawing++;
         }
