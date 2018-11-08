@@ -17,6 +17,7 @@ static unsigned char line[] = "                                ";
 main() {
     unsigned char i;
     unsigned char j;
+    unsigned int x;
 
     init_video_ram(STACK_SIZE);
 
@@ -71,6 +72,11 @@ main() {
 
         locate(90-65, j * 2);
         print(line);
+    }
+
+    // Draw vertical lines
+    for(x = 40; x < 680; x++) {
+        vertical_line(x, 20, 235);
     }
 
     // Wait for a key before returning to CP/M

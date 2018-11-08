@@ -20,6 +20,7 @@ static unsigned char double_bits_half[16] = {
 // The video structure contains global variables for this library.
 static struct {
     unsigned int *roller;       // Roller RAM address
+    unsigned int *line_starts;  // Line start offsets
     unsigned char *screen;      // Screen memory address
     unsigned char row;          // Row where the next character will be printed
     unsigned char col;          // Column where the next character will be
@@ -75,10 +76,11 @@ void alloc_screen_memory(unsigned int stack_size) {
     void *p = NULL;
 
     // The roller RAM address must be a multiple of 512.
-    video.roller = (&p - stack_size - SCREEN_SIZE - ROLLER_SIZE) & 0xFE00;
+    video.roller = (&p - stack_size - SCREEN_SIZE - ROLLER_SIZE * 2) & 0xFE00;
+    video.line_starts = (&p - stack_size - SCREEN_SIZE - ROLLER_SIZE) & 0xFE00;
 
     // Video memory directly follows the roller RAM.
-    video.screen = video.roller + ROLLER_ENTRIES;
+    video.screen = video.roller + ROLLER_ENTRIES * 2;
 }
 
 // Initialize the roller RAM to point at our own screen memory
@@ -100,9 +102,11 @@ void init_roller_ram() {
             // Determines which RAM bank will hold the line
             inbank = address & (BANK_SIZE - 1);
 
+            video.line_starts[index] = address;
             video.roller[index++] = (((address >> 14) + BASE_BANK) << 13)
                                   + ((inbank >> 1) & 0xFFF8)
                                   + (inbank & 7);
+
             address++;
         }
 
@@ -268,6 +272,22 @@ void print_double_size(const unsigned char *string) {
 // Defines which font to use when printing characters on the screen.
 void set_font(unsigned char *font) {
     video.font = font;
+}
+
+unsigned char vertical_masks[] = { 128, 64, 32, 16, 8, 4, 2, 1 };
+void vertical_line(unsigned int x, unsigned char y1, unsigned char y2) {
+    unsigned char mask;
+    unsigned char y;
+    unsigned int offset;
+    unsigned char *address;
+
+    mask = vertical_masks[x & 7];
+    offset = x & 0xfff8;
+
+    for(y = y1; y <= y2; y++) {
+        address = (unsigned char *)(video.line_starts[y]) + offset;
+        *address |= mask;
+    }
 }
 
 // Initializes everything!

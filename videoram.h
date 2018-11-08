@@ -28,5 +28,6 @@ extern void restore_video_ram();
 extern void clear_screen();
 extern void locate(unsigned char col, unsigned char row);
 extern void print(const unsigned char *string);
+extern void vertical_line(unsigned int x, unsigned char y1, unsigned char y2);
 
 #endif
