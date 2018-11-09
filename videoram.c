@@ -237,6 +237,7 @@ void print_double_height(const unsigned char *string) {
 
 // Print double size characters.
 void print_double_size(const unsigned char *string) {
+/*
     unsigned char i;
     unsigned char *character_drawing;
     unsigned char left;
@@ -267,6 +268,124 @@ void print_double_size(const unsigned char *string) {
 
         advance_cursor();
     }
+*/
+#asm
+    ; IX = stack frame
+    ; string +4
+    ; i -1, character_drawing -3, left -4, right -5, offset -7
+    push ix
+    ld ix, 0
+    add ix, sp
+
+    push bc
+    push bc
+    push bc
+    dec sp
+
+    ld l, (ix+4)
+    ld h, (ix+5)
+
+.forloop_pds
+    ; for(; *string != '\0'; string++) {
+    ld a,(hl)
+    or a
+    jp z, endloop_pds
+
+    inc hl
+    push hl
+
+    ; *string * 8
+    ld l, a
+    ld h, 0
+    add hl, hl
+    add hl, hl
+    add hl, hl
+
+    ; character_drawing = &video.font[*string * 8];
+    ex de, hl
+    ld hl, (_video+10)
+    add hl, de
+    ex de, hl ; de = &video.font[*string * 8]
+
+    ld a, 0
+    ; for(i = 0; i != 16; i+= 2) {
+.forloop_pds_i
+    cp 16
+    jp c, forloop_pds_i_inside
+    push de
+    call _advance_cursor
+    pop de
+    pop hl
+    jp forloop_pds
+
+.forloop_pds_i_inside
+    push af
+
+    ; offset = dh_offset[i];
+    ld hl, _dh_offset
+    add a
+    ld c, a
+    ld b, 0
+    add hl, bc
+    ld c, (hl)
+    inc hl
+    ld b, (hl)
+    push bc
+    pop iy
+    ld bc, (_video+8)
+    add iy, bc ; iy = &video.address[offset]
+
+    ; *character_drawing >> 4
+    ld a, (de)
+    rra
+    rra
+    rra
+    rra
+    and 0x0f
+
+    ; left = video.brightness[*character_drawing >> 4];
+    ld hl, (_video+13)
+    add l
+    ld l, a
+    jr nc, ASMPC+3
+    inc h
+    ld a, (hl)
+
+    ; video.address[offset] = left; // a = left, iy = offset
+    ; video.address[offset+1] = left;
+    ld (iy+0), a
+    ld (iy+1), a
+
+    ; *character_drawing & 0x0f
+    ld a, (de)
+    and 0x0f
+
+    ; right = video.brightness[*character_drawing & 15];
+    ld hl, (_video+13)
+    add l
+    ld l, a
+    jr nc, ASMPC+3
+    inc h
+    ld a, (hl)
+
+    ; video.address[offset+8] = right; // a = right
+    ; video.address[offset+9] = right;
+    ld (iy+8), a
+    ld (iy+9), a
+
+    pop af
+    add a, 2
+    inc de
+    jp forloop_pds_i
+
+.endloop_pds
+    inc sp
+    pop bc
+    pop bc
+    pop bc
+    pop ix
+    ret
+#endasm
 }
 
 // Defines which font to use when printing characters on the screen.
@@ -276,18 +395,150 @@ void set_font(unsigned char *font) {
 
 unsigned char vertical_masks[] = { 128, 64, 32, 16, 8, 4, 2, 1 };
 void vertical_line(unsigned int x, unsigned char y1, unsigned char y2) {
-    unsigned char mask;
+/*    unsigned char mask;
     unsigned char y;
     unsigned int offset;
     unsigned char *address;
+    unsigned int *line_start;
 
-    mask = vertical_masks[x & 7];
+    mask = vertical_masks[(unsigned char)x & 7];
     offset = x & 0xfff8;
 
-    for(y = y1; y <= y2; y++) {
-        address = (unsigned char *)(video.line_starts[y]) + offset;
+    line_start = &video.line_starts[y1];
+    for(y = y1; y != y2 + 1; y++) {
+        address = (unsigned char *)(*line_start) + offset;
         *address |= mask;
+        line_start++;
     }
+*/
+#asm
+    ; x +8, y1 +6, y2 +4
+    ; mask -1, y -2, offset -4, line_start -6
+    ; IX = stack frame
+    push ix
+    ld ix, 0
+    add ix, sp
+
+    ; Reserve 6 bytes on the stack
+    push bc
+    push bc
+    push bc
+
+    ; mask = vertical_masks[(unsigned char)x & 7];
+    ld a, (ix+8) ; x
+    and 7
+    ld e, a
+    ld d, 0
+    ld hl, _vertical_masks
+    add hl,de
+    ld a,(hl)
+
+    ld (ix-1), a ; mask
+
+    ; offset = x & 0xfff8;
+    ld a, (ix+8) ; x
+    and 0xf8
+    ld e, a
+    ld d, (ix+9)
+
+    ld (ix-4), e ; offset
+    ld (ix-3), d
+
+    ; line_start = &video.line_starts[y1];
+    ld e, (ix+6) ; y1
+    ld d, 0
+
+    ld    hl, (_video+1+1)
+    add hl, de
+    add hl, de
+
+    ex (sp), hl
+
+    ; for(y = y1; y != y2 + 1; y++) {
+    ld a, (ix+4) ; y2
+    sub a, (ix+6) ; y1
+
+    or a
+    jp z, endfor
+
+    pop de
+    push de
+
+.forloop
+    ld l, e
+    ld h, d
+
+    ; address = (unsigned char *)(*line_start) + offset;
+    ld c,(hl)
+    inc hl
+    ld b,(hl) ; bc = *line_start
+
+    ld l, (ix-4) ; hl=offset
+    ld h, (ix-3)
+
+    add hl, bc ; hl = *line_start + offset
+
+    ; *address |= mask;
+    ld c, (ix-1) ; mask
+
+    ld b, a
+    ld a, (hl)
+    or c
+    ld (hl), a
+    ld a, b
+
+    ; line_start++;
+    inc de
+    inc de
+
+    dec a
+    jp nz, forloop
+
+.endfor
+
+    pop bc
+    pop bc
+    pop bc
+    pop ix
+    ret
+#endasm
+}
+
+unsigned char horz_start_masks[] = { 255, 127, 63, 31, 15, 7, 3, 1 };
+unsigned char horz_end_masks[] = { 128, 192, 224, 240, 248, 252, 254, 255 };
+void horizontal_line(unsigned int x1, unsigned int x2, unsigned char y) {
+    unsigned char start_mask;
+    unsigned char end_mask;
+    unsigned char pixel_count;
+    unsigned char i;
+    unsigned char *address;
+
+    start_mask = horz_start_masks[(unsigned char)x1 & 7];
+    end_mask = horz_end_masks[(unsigned char)x2 & 7];
+
+    address = (unsigned char *)(video.line_starts[y]) + (x1 & 0xfff8);
+    if(x1 & 0xfff8 == x2 & 0xfff8) {
+        *address |= start_mask & end_mask;
+        return;
+    }
+
+    *address |= start_mask;
+    address += 8;
+
+    pixel_count = (((x2 & 0xfff8) - (x1 & 0xfff8)) >> 3) - 1;
+    for(i = 0; i != pixel_count; i++) {
+        *address = 255;
+        address += 8;
+    }
+
+    *address |= end_mask;
+}
+
+void frame(unsigned int tx, unsigned char ty, unsigned int bx, unsigned char by) {
+    vertical_line(tx, ty, by);
+    vertical_line(bx, ty, by);
+    horizontal_line(tx, bx, ty);
+    horizontal_line(tx, bx, by);
 }
 
 // Initializes everything!

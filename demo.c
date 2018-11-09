@@ -18,6 +18,7 @@ main() {
     unsigned char i;
     unsigned char j;
     unsigned int x;
+    unsigned char y;
 
     init_video_ram(STACK_SIZE);
 
@@ -61,6 +62,8 @@ main() {
     locate(0, 15);
     print("de texte.");
 
+    frame(0, 5*8, 23*8, 16*8);
+
     // Print every character (except character 0)
     set_size(SIZE_DOUBLE);
     for(j = 0; j < 16; j++) {
@@ -74,10 +77,31 @@ main() {
         print(line);
     }
 
-    // Draw vertical lines
-    for(x = 40; x < 680; x++) {
-        vertical_line(x, 20, 235);
+    for(i = 0; i < 16; i++) {
+        vertical_line(i * 32 + 24 * 8, 0, 255);
+        horizontal_line(24 * 8, 703, i * 16);
     }
+
+    vertical_line(704, 0, 255);
+    horizontal_line(24 * 8, 703, 255);
+
+    /*
+    // Draw vertical lines
+    for(x = 10; x < 710; x++) {
+        vertical_line(x, 10, 245);
+    }
+
+    // Draw horizontal lines
+    for(y = 20; y < 100; y++) {
+        horizontal_line(500-y, 500+y, y);
+    }
+    */
+
+    /*
+    for(x = 10; x < 120; x+= 10) {
+        frame(x * 2, x, 720 - x * 2, 255 - x);
+    }
+    */
 
     // Wait for a key before returning to CP/M
     getchar();

@@ -29,5 +29,7 @@ extern void clear_screen();
 extern void locate(unsigned char col, unsigned char row);
 extern void print(const unsigned char *string);
 extern void vertical_line(unsigned int x, unsigned char y1, unsigned char y2);
+extern void horizontal_line(unsigned int x1, unsigned int x2, unsigned char y);
+extern void frame(unsigned int tx, unsigned char ty, unsigned int bx, unsigned char by);
 
 #endif
