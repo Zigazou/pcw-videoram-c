@@ -19,18 +19,19 @@ static unsigned char double_bits_half[16] = {
 
 // The video structure contains global variables for this library.
 static struct {
-    unsigned int *roller;       // Roller RAM address
-    unsigned int *line_starts;  // Line start offsets
-    unsigned char *screen;      // Screen memory address
-    unsigned char row;          // Row where the next character will be printed
-    unsigned char col;          // Column where the next character will be
-                                // printed
-    unsigned char *address;     // Screen address where the next character will
-                                // be printed
-    unsigned char *font;        // Address of the character font
-    unsigned char font_size;    // Size at which the next character will be
-                                // printed
-    unsigned char *brightness;  // Brightness for double width character
+    unsigned int *roller;       // 0: Roller RAM address
+    unsigned int *line_starts;  // 2: Line start offsets
+    unsigned char *screen;      // 4: Screen memory address
+    unsigned char row;          // 6: Row where the next character will be
+                                //    printed
+    unsigned char col;          // 7: Column where the next character will be
+                                //    printed
+    unsigned char *address;     // 8: Screen address where the next character
+                                //    will be printed
+    unsigned char *font;        // 10: Address of the character font
+    unsigned char font_size;    // 12: Size at which the next character will be
+                                //     printed
+    unsigned char *brightness;  // 13: Brightness for double width character
 } video = { NULL, NULL, 0, 0, NULL, NULL, 0, NULL };
 
 // Function type for a print function
@@ -148,6 +149,7 @@ void locate(unsigned char col, unsigned char row) {
 
 // Update the cursor position after each printed character.
 void advance_cursor() {
+    /*
     if(video.font_size & 1) {
         video.col += 2;
         video.address += 16;
@@ -171,6 +173,106 @@ void advance_cursor() {
 
     video.row = 0;
     video.address = video.screen;
+*/
+/*
+    unsigned int *roller;       // 0: Roller RAM address
+    unsigned int *line_starts;  // 2: Line start offsets
+    unsigned char *screen;      // 4: Screen memory address
+    unsigned char row;          // 6: Row where the next character will be
+                                //    printed
+    unsigned char col;          // 7: Column where the next character will be
+                                //    printed
+    unsigned char *address;     // 8: Screen address where the next character
+                                //    will be printed
+    unsigned char *font;        // 10: Address of the character font
+    unsigned char font_size;    // 12: Size at which the next character will be
+                                //     printed
+    unsigned char *brightness;  // 13: Brightness for double width character
+*/
+#asm
+    ; if(video.font_size & 1) {
+    ld a, (_video+12)
+	rrca
+	jp	nc, ac_simple_width
+
+.ac_double_width
+    ; video.col += 2;
+	ld	a,(_video+7)
+    add 2
+    ld (_video+7), a
+
+    ; video.address += 16;
+    ld hl, (_video+8)
+    ex de, hl
+    ld hl, 16
+    add hl, de
+    ld (_video+8), hl
+	jp	same_line
+
+.ac_simple_width
+    ; video.col++;
+	ld	hl,_video+7
+	inc	(hl)
+
+    ; video.address += 8;
+	ld	hl, (_video+8)
+    ex de, hl
+    ld hl, 8
+    add hl, de
+    ld (_video+8), hl
+
+.same_line
+    ; if(video.col < 90) return;
+    ld a, (_video+7)
+    cp 90
+    ret c
+
+.next_line
+    ; video.col = 0;
+    xor a
+    ld (_video+7), a
+
+    ; if(video.font_size & 2) {
+	ld a, (_video+12)
+	and	2
+	jp z, simple_height
+
+.double_height
+    ; video.row += 2;
+    ld a, (_video+6)
+    add 2
+    ld (_video+6), a
+
+    ; video.address += 720;
+    ld hl, (_video+8)
+    ld de, 720
+    add hl, de
+    ld (_video+8), hl
+	jp	same_page
+
+.simple_height
+    ; video.row++;
+	ld	hl, _video+6
+	inc	(hl)
+
+.same_page
+    ; if(video.row < 32) return;
+	ld	a,(_video+6)
+    cp 32
+    ret c
+.next_page
+    ; video.row = 0;
+    xor a
+    ld (_video+6), a
+
+    ; video.address = video.screen;
+	ld	de, _video+8
+	ld	hl, _video+4
+    ldi
+    ldi
+	ret
+
+#endasm
 }
 
 // Main print function which uses the dedicated print function given the current
@@ -182,12 +284,62 @@ void print(const unsigned char *string) {
 // Print normal size characters. This uses memcpy in order to draw characters
 // at the maximum speed.
 void print_normal_size(const unsigned char *string) {
+    /*
     unsigned char i;
 
     for(; *string != '\0'; string++) {
         memcpy(video.address, &video.font[*string * 8], 8);
         advance_cursor();
-    }
+    }*/
+
+#asm
+    ; IX = stack frame
+    ; string +4
+    ; i -1, character_drawing -3, left -4, right -5, offset -7
+    push ix
+    ld ix, 0
+    add ix, sp
+
+    ld c, (ix+4)
+    ld b, (ix+5)
+
+.forloop_pns
+    ; for(; *string != '\0'; string++) {
+    ld a, (bc)
+    or a
+    jp z, endloop_pns
+
+    ; &video.font[*string * 8]
+    ld l, a
+    ld h, 0
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld de, (_video+10)
+    add hl, de
+
+    push bc
+    ld de, (_video+8)
+    ldi
+    ldi
+    ldi
+    ldi
+    ldi
+    ldi
+    ldi
+    ldi
+
+    call _advance_cursor
+    pop bc
+
+    inc bc
+    jp forloop_pns
+
+.endloop_pns
+    pop ix
+    ret
+#endasm
+
 }
 
 // Print double width characters.
